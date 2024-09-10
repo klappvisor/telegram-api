@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP                   #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DeriveDataTypeable    #-}
 {-# LANGUAGE FlexibleInstances     #-}
@@ -61,7 +62,11 @@ instance (Core.RunClient m, ToMultipartFormData b, MimeUnrender ct a, cts' ~ (ct
   clientWithRoute _pm Proxy req reqData = do
     clientEnv <- ask
     let requestToClientRequest' req' baseurl' = do
-          let requestWithoutBody = makeClientRequest clientEnv baseurl' req'
+          requestWithoutBody <-
+            #if ! MIN_VERSION_servant_client(0,20,0)
+              pure $
+            #endif
+              makeClientRequest clientEnv baseurl' req'
           formDataBody (toMultipartFormData reqData) requestWithoutBody
     snd <$> performRequestCT' requestToClientRequest' (Proxy :: Proxy ct) H.methodPost req
 

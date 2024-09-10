@@ -50,7 +50,7 @@ library
                      , containers
                      , http-client
                      , servant
-                     , servant-client >= 0.16 && < 0.20
+                     , servant-client >= 0.16 && < 0.21
                      , servant-client-core
                      , mtl
                      , text
