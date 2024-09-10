@@ -78,7 +78,8 @@ test-suite telegram-api-test
   build-depends:       base
                      , aeson
                      , hjpath
-                     , ansi-wl-pprint
+                     , prettyprinter
+                     , prettyprinter-ansi-terminal
                      , http-client
                      , http-client-tls
                      , http-types

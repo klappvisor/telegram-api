@@ -14,7 +14,8 @@ import qualified PaymentsSpec
 import qualified StickersSpec
 import           System.Environment           (lookupEnv, withArgs)
 import           Test.Hspec
-import qualified Text.PrettyPrint.ANSI.Leijen as PP
+import qualified Prettyprinter                as PP
+import qualified Prettyprinter.Render.Terminal as PP
 import           Text.Read                    (readMaybe)
 import qualified UpdatesSpec
 import           Web.Telegram.API.Bot
@@ -81,11 +82,18 @@ runIntegrationSpec (Just token) (Just chatId) (Just botName) (Just paymentToken)
 runIntegrationSpec _ _ _ _ = describe "Integration tests" $
         error "Missing required arguments for integration tests. Run stack test --test-arguments \"--help\" for more info"
 
-description ::  Maybe PP.Doc
-description = Just $
-           PP.text "Run the haskell-telegram-api tests"
-    PP.<$> (PP.text "Running with stack: " PP.<> PP.text "stack test --test-arguments=\"--integration -c 1235122 -b MyTeleBot -- -m send\"")
-    PP.<$> (PP.red (PP.text "WARNING: ") PP.<> PP.text "the HSPEC_ARGS are optional but if present MUST be at the end and seperated from the other options with a -- ")
+description :: Maybe (PP.Doc PP.AnsiStyle)
+description =
+  Just $
+  mconcat
+    [ "Run the haskell-telegram-api tests"
+    , PP.line
+    , "Running with stack: "
+    , "stack test --test-arguments=\"--integration -c 1235122 -b MyTeleBot -- -m send\""
+    , PP.line
+    , PP.annotate (PP.color PP.Red) "WARNING: "
+    , "the HSPEC_ARGS are optional but if present MUST be at the end and seperated from the other options with a -- "
+    ]
 
 readChatId :: String -> ChatId
 readChatId s@('@':_) = ChatChannel $ T.pack s
