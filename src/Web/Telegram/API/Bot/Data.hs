@@ -830,6 +830,28 @@ instance ToJSON CallbackQuery where
 instance FromJSON CallbackQuery where
   parseJSON = parseJsonDrop 3
 
+type BusinessConnection = Value
+
+type BusinessMessagesDeleted = Value
+
+type MessageReactionCountUpdated = Value
+
+type MessageReactionUpdated = Value
+
+type PaidMediaPurchased = Value
+
+type Poll = Value
+
+type PollAnswer = Value
+
+type ChatMemberUpdated = Value
+
+type ChatJoinRequest = Value
+
+type ChatBoostUpdated = Value
+
+type ChatBoostRemoved = Value
+
 -- | This object represents an incoming update.
 -- Only one of the optional parameters can be present in any given update.
 data Update = Update
@@ -839,11 +861,25 @@ data Update = Update
   , edited_message       :: Maybe Message -- ^ New version of a message that is known to the bot and was edited
   , channel_post         :: Maybe Message -- ^ New incoming channel post of any kind — text, photo, sticker, etc.
   , edited_channel_post  :: Maybe Message -- ^ New version of a channel post that is known to the bot and was edited
+  , business_connection  :: Maybe BusinessConnection -- ^ The bot was connected to or disconnected from a business account, or a user edited an existing connection with the bot
+  , business_message     :: Maybe Message -- ^ New message from a connected business account
+  , edited_business_message :: Maybe Message -- ^ New version of a message from a connected business account
+  , deleted_business_messages :: Maybe BusinessMessagesDeleted -- ^ Messages were deleted from a connected business account
+  , message_reaction     :: Maybe MessageReactionUpdated -- ^ A reaction to a message was changed by a user. The bot must be an administrator in the chat and must explicitly specify "message_reaction" in the list of allowed_updates to receive these updates. The update isn't received for reactions set by bots.
+  , message_reaction_count :: MessageReactionCountUpdated -- ^ Reactions to a message with anonymous reactions were changed. The bot must be an administrator in the chat and must explicitly specify "message_reaction_count" in the list of allowed_updates to receive these updates. The updates are grouped and can be sent with delay up to a few minutes.
   , inline_query         :: Maybe InlineQuery -- ^ New incoming inline query
   , chosen_inline_result :: Maybe ChosenInlineResult -- ^ The result of a inline query that was chosen by a user and sent to their chat partner
   , callback_query       :: Maybe CallbackQuery -- ^ This object represents an incoming callback query from a callback button in an inline keyboard. If the button that originated the query was attached to a message sent by the bot, the field message will be presented. If the button was attached to a message sent via the bot (in inline mode), the field inline_message_id will be presented.
   , shipping_query       :: Maybe ShippingQuery -- ^  New incoming shipping query. Only for invoices with flexible price
   , pre_checkout_query   :: Maybe PreCheckoutQuery -- ^ New incoming pre-checkout query. Contains full information about checkout
+  , purchased_paid_media :: Maybe PaidMediaPurchased -- ^ A user purchased paid media with a non-empty payload sent by the bot in a non-channel chat
+  , poll                 :: Maybe Poll -- ^ New poll state. Bots receive only updates about manually stopped polls and polls, which are sent by the bot
+  , poll_answer          :: Maybe PollAnswer -- ^ A user changed their answer in a non-anonymous poll. Bots receive new votes only in polls that were sent by the bot itself.
+  , my_chat_member       :: Maybe ChatMemberUpdated -- ^ The bot's chat member status was updated in a chat. For private chats, this update is received only when the bot is blocked or unblocked by the user.
+  , chat_member          :: Maybe ChatMemberUpdated -- ^ A chat member's status was updated in a chat. The bot must be an administrator in the chat and must explicitly specify "chat_member" in the list of allowed_updates to receive these updates.
+  , chat_join_request    :: Maybe  ChatJoinRequest -- ^ A request to join the chat has been sent. The bot must have the can_invite_users administrator right in the chat to receive these updates.
+  , chat_boost           :: Maybe ChatBoostUpdated -- ^ A chat boost was added or changed. The bot must be an administrator in the chat to receive these updates.
+  , removed_chat_boost   :: Maybe ChatBoostRemoved -- ^ A boost was removed from a chat. The bot must be an administrator in the chat to receive these updates.
   } deriving (FromJSON, ToJSON, Show, Generic)
 
 -- | This object represents a point on the map.
