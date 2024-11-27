@@ -1,5 +1,7 @@
-{-# LANGUAGE DeriveAnyClass    #-}
-{-# LANGUAGE DeriveGeneric     #-}
+{-# LANGUAGE BlockArguments #-}
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | This module contains objects which represent data of Telegram Bot API responses
@@ -32,6 +34,8 @@ module Web.Telegram.API.Bot.Data
     , InlineQueryResult             (..)
     , InlineKeyboardMarkup          (..)
     , InlineKeyboardButton          (..)
+    , WebAppInfo                    (..)
+    , LoginUrl                      (..)
     , CallbackGame                  (..)
     , CallbackQuery                 (..)
     , ChatType                      (..)
@@ -77,6 +81,7 @@ module Web.Telegram.API.Bot.Data
     , inlineQueryResultCachedVoice
     , inputMediaPhoto
     , inputMediaVideo
+    , loginUrl
     ) where
 
 import           Prelude                      hiding (id)
@@ -84,7 +89,7 @@ import           Prelude                      hiding (id)
 import           Data.Aeson
 import qualified Data.Char                    as Char
 import           Data.Int                     (Int64)
-import           Data.List
+import           Data.List                    (isPrefixOf)
 import           Data.Text                    (Text)
 import           GHC.Generics
 
@@ -732,7 +737,7 @@ inlineQueryResultCachedVoice id fileId title = InlineQueryResultCachedVoice id f
 inlineQueryResultCachedAudio :: Text -> Text -> InlineQueryResult
 inlineQueryResultCachedAudio id fileId = InlineQueryResultCachedAudio id fileId Nothing Nothing Nothing
 
-data InlineKeyboardMarkup = InlineKeyboardMarkup
+newtype InlineKeyboardMarkup = InlineKeyboardMarkup
   {
     inline_keyboard :: [[InlineKeyboardButton]]
   } deriving (FromJSON, ToJSON, Show, Generic)
@@ -740,11 +745,17 @@ data InlineKeyboardMarkup = InlineKeyboardMarkup
 data InlineKeyboardButton = InlineKeyboardButton
   {
     ikb_text                             :: Text -- ^ Label text on the button
-  , ikb_url                              :: Maybe Text -- ^ HTTP url to be opened when button is pressed
+  , ikb_url                              :: Maybe Text -- ^ HTTP or tg:// URL to be opened when the button is pressed. Links @tg://user?id=<user_id>@ can be used to mention a user by their ID without using a username, if this is allowed by their privacy settings.
   , ikb_callback_data                    :: Maybe Text -- ^ Data to be sent in a callback query to the bot when button is pressed, 1-64 bytes
+  , ikb_web_app                          :: Maybe WebAppInfo -- ^ Description of the Web App that will be launched when the user presses the button. The Web App will be able to send an arbitrary message on behalf of the user using the method 'answerWebAppQuery'. Available only in private chats between a user and the bot.
+  , ikb_login_url                        :: Maybe LoginUrl -- ^ An HTTPS URL used to automatically authorize the user. Can be used as a replacement for the Telegram Login Widget.
   , ikb_switch_inline_query              :: Maybe Text -- ^  If set, pressing the button will prompt the user to select one of their chats, open that chat and insert the bot‘s username and the specified inline query in the input field. Can be empty, in which case just the bot’s username will be inserted.
+                                                       --
+                                                       -- Note: This offers an easy way for users to start using your bot in inline mode when they are currently in a private chat with it. Especially useful when combined with switch_pm… actions - in this case the user will be automatically returned to the chat they switched from, skipping the chat selection screen.
+  , ikb_switch_inline_query_current_chat :: Maybe Text -- ^ If set, pressing the button will insert the bot's username and the specified inline query in the current chat's input field. May be empty, in which case only the bot's username will be inserted.
+                                                       --
+                                                       -- This offers a quick way for the user to open your bot in inline mode in the same chat - good for selecting something from multiple options.
   , ikb_callback_game                    :: Maybe CallbackGame -- ^  Description of the game that will be launched when the user presses the button. NOTE: This type of button must always be the first button in the first row.
-  , ikb_switch_inline_query_current_chat :: Maybe Text -- ^ If set, pressing the button will insert the bot‘s username and the specified inline query in the current chat's input field. Can be empty, in which case only the bot’s username will be inserted.
   , ikb_pay                              :: Maybe Bool -- ^ Specify True, to send a Pay button. NOTE: This type of button must always be the first button in the first row.
   } deriving (Show, Generic)
 
@@ -756,7 +767,43 @@ instance FromJSON InlineKeyboardButton where
 
 inlineKeyboardButton :: Text -> InlineKeyboardButton
 inlineKeyboardButton buttonText =
-  InlineKeyboardButton buttonText Nothing Nothing Nothing Nothing Nothing Nothing
+  InlineKeyboardButton buttonText Nothing Nothing Nothing Nothing Nothing Nothing Nothing Nothing
+
+-- | Describes a Web App.
+newtype WebAppInfo = WebAppInfo
+  {
+    wai_url :: Text -- ^ An HTTPS URL of a Web App to be opened with additional data as specified in Initializing Web Apps
+  } deriving (Show, Generic)
+
+instance ToJSON WebAppInfo where
+  toJSON = toJsonDrop 4
+
+instance FromJSON WebAppInfo where
+  parseJSON = parseJsonDrop 4
+
+-- | This object represents a parameter of the inline keyboard button used to automatically authorize a user. Serves as a great replacement for the Telegram Login Widget when the user is coming from Telegram. All the user needs to do is tap/click a button and confirm that they want to log in:
+--
+-- Telegram apps support these buttons as of version 5.7.
+--
+-- Sample bot: @discussbot
+data LoginUrl = LoginUrl
+  {
+    lu_url                  :: Text -- ^ An HTTPS URL to be opened with user authorization data added to the query string when the button is pressed. If the user refuses to provide authorization data, the original URL without information about the user will be opened. The data added is the same as described in Receiving authorization data.
+                                    --
+                                    -- NOTE: You must always check the hash of the received data to verify the authentication and the integrity of the data as described in Checking authorization.
+  , lu_forward_text         :: Maybe Text -- ^ New text of the button in forwarded messages.
+  , lu_bot_username         :: Maybe Text -- ^ Username of a bot, which will be used for user authorization. See Setting up a bot for more details. If not specified, the current bot's username will be assumed. The url's domain must be the same as the domain linked with the bot. See Linking your domain to the bot for more details.
+  , lu_request_write_access :: Maybe Bool -- ^ Pass True to request the permission for your bot to send messages to the user.
+  } deriving (Show, Generic)
+
+instance ToJSON LoginUrl where
+  toJSON = toJsonDrop 3
+
+instance FromJSON LoginUrl where
+  parseJSON = parseJsonDrop 3
+
+loginUrl :: Text -> LoginUrl
+loginUrl url = LoginUrl url Nothing Nothing Nothing
 
 data CallbackGame = CallbackGame
   {
@@ -785,6 +832,28 @@ instance ToJSON CallbackQuery where
 instance FromJSON CallbackQuery where
   parseJSON = parseJsonDrop 3
 
+type BusinessConnection = Value
+
+type BusinessMessagesDeleted = Value
+
+type MessageReactionCountUpdated = Value
+
+type MessageReactionUpdated = Value
+
+type PaidMediaPurchased = Value
+
+type Poll = Value
+
+type PollAnswer = Value
+
+type ChatMemberUpdated = Value
+
+type ChatJoinRequest = Value
+
+type ChatBoostUpdated = Value
+
+type ChatBoostRemoved = Value
+
 -- | This object represents an incoming update.
 -- Only one of the optional parameters can be present in any given update.
 data Update = Update
@@ -794,11 +863,25 @@ data Update = Update
   , edited_message       :: Maybe Message -- ^ New version of a message that is known to the bot and was edited
   , channel_post         :: Maybe Message -- ^ New incoming channel post of any kind — text, photo, sticker, etc.
   , edited_channel_post  :: Maybe Message -- ^ New version of a channel post that is known to the bot and was edited
+  , business_connection  :: Maybe BusinessConnection -- ^ The bot was connected to or disconnected from a business account, or a user edited an existing connection with the bot
+  , business_message     :: Maybe Message -- ^ New message from a connected business account
+  , edited_business_message :: Maybe Message -- ^ New version of a message from a connected business account
+  , deleted_business_messages :: Maybe BusinessMessagesDeleted -- ^ Messages were deleted from a connected business account
+  , message_reaction     :: Maybe MessageReactionUpdated -- ^ A reaction to a message was changed by a user. The bot must be an administrator in the chat and must explicitly specify "message_reaction" in the list of allowed_updates to receive these updates. The update isn't received for reactions set by bots.
+  , message_reaction_count :: MessageReactionCountUpdated -- ^ Reactions to a message with anonymous reactions were changed. The bot must be an administrator in the chat and must explicitly specify "message_reaction_count" in the list of allowed_updates to receive these updates. The updates are grouped and can be sent with delay up to a few minutes.
   , inline_query         :: Maybe InlineQuery -- ^ New incoming inline query
   , chosen_inline_result :: Maybe ChosenInlineResult -- ^ The result of a inline query that was chosen by a user and sent to their chat partner
   , callback_query       :: Maybe CallbackQuery -- ^ This object represents an incoming callback query from a callback button in an inline keyboard. If the button that originated the query was attached to a message sent by the bot, the field message will be presented. If the button was attached to a message sent via the bot (in inline mode), the field inline_message_id will be presented.
   , shipping_query       :: Maybe ShippingQuery -- ^  New incoming shipping query. Only for invoices with flexible price
   , pre_checkout_query   :: Maybe PreCheckoutQuery -- ^ New incoming pre-checkout query. Contains full information about checkout
+  , purchased_paid_media :: Maybe PaidMediaPurchased -- ^ A user purchased paid media with a non-empty payload sent by the bot in a non-channel chat
+  , poll                 :: Maybe Poll -- ^ New poll state. Bots receive only updates about manually stopped polls and polls, which are sent by the bot
+  , poll_answer          :: Maybe PollAnswer -- ^ A user changed their answer in a non-anonymous poll. Bots receive new votes only in polls that were sent by the bot itself.
+  , my_chat_member       :: Maybe ChatMemberUpdated -- ^ The bot's chat member status was updated in a chat. For private chats, this update is received only when the bot is blocked or unblocked by the user.
+  , chat_member          :: Maybe ChatMemberUpdated -- ^ A chat member's status was updated in a chat. The bot must be an administrator in the chat and must explicitly specify "chat_member" in the list of allowed_updates to receive these updates.
+  , chat_join_request    :: Maybe  ChatJoinRequest -- ^ A request to join the chat has been sent. The bot must have the can_invite_users administrator right in the chat to receive these updates.
+  , chat_boost           :: Maybe ChatBoostUpdated -- ^ A chat boost was added or changed. The bot must be an administrator in the chat to receive these updates.
+  , removed_chat_boost   :: Maybe ChatBoostRemoved -- ^ A boost was removed from a chat. The bot must be an administrator in the chat to receive these updates.
   } deriving (FromJSON, ToJSON, Show, Generic)
 
 -- | This object represents a point on the map.
@@ -865,38 +948,97 @@ instance ToJSON ChatPhoto where
 instance FromJSON ChatPhoto where
   parseJSON = parseJsonDrop 11
 
+data True = STrue
+  deriving (Show)
+
+instance ToJSON True where
+  toJSON STrue = Bool True
+
+instance FromJSON True where
+  parseJSON =
+    withBool "True" \b -> if b then pure STrue else fail "Expected true"
+
+type MessageOrigin = Value
+type ExternalReplyInfo = Value
+type TextQuote = Value
+type Story = Value
+type LinkPreviewOptions = Value
+type PaidMediaInfo = Value
+type Dice = Value
+type MessageAutoDeleteTimerChanged = Value
+type RefundedPayment = Value
+type UsersShared = Value
+type ChatShared = Value
+type WriteAccessAllowed = Value
+type PassportData = Value
+type ProximityAlertTriggered = Value
+type ChatBoostAdded = Value
+type ChatBackground = Value
+type ForumTopicCreated = Value
+type ForumTopicEdited = Value
+type ForumTopicClosed = Value
+type ForumTopicReopened = Value
+type GeneralForumTopicHidden = Value
+type GeneralForumTopicUnhidden = Value
+type Giveaway = Value
+type GiveawayCreated = Value
+type GiveawayWinners = Value
+type GiveawayCompleted = Value
+type VideoChatScheduled = Value
+type VideoChatStarted = Value
+type VideoChatEnded = Value
+type VideoChatParticipantsInvited = Value
+type WebAppData = Value
+
 -- | This object represents a message.
 data Message = Message
   {
     message_id              :: Int -- ^ Unique message identifier
+  , message_thread_id       :: Maybe Int -- ^ Unique identifier of a message thread to which the message belongs; for supergroups only
   , from                    :: Maybe User -- ^ Sender, can be empty for messages sent to channels
+  , sender_chat             :: Maybe Chat -- ^ Sender of the message when sent on behalf of a chat. For example, the supergroup itself for messages sent by its anonymous administrators or a linked channel for messages automatically forwarded to the channel's discussion group. For backward compatibility, if the message was sent on behalf of a chat, the field from contains a fake sender user in non-channel chats.
+  , sender_boost_count      :: Maybe Integer -- ^ If the sender of the message boosted the chat, the number of boosts added by the user
+  , sender_business_bot     :: Maybe User -- ^ The bot that actually sent the message on behalf of the business account. Available only for outgoing messages sent on behalf of the connected business account.
   , date                    :: Int -- ^ Date the message was sent in Unix time
+  , business_connection_id  :: Maybe Text -- ^ Unique identifier of the business connection from which the message was received. If non-empty, the message belongs to a chat of the corresponding business account that is independent from any potential bot chat which might share the same identifier.
   , chat                    :: Chat -- ^ Conversation the message belongs to
-  , forward_from            :: Maybe User -- ^ For forwarded messages, sender of the original message
-  , forward_from_chat       :: Maybe Chat -- ^ For messages forwarded from a channel, information about the original channel
-  , forward_from_message_id :: Maybe Int -- ^ For forwarded channel posts, identifier of the original message in the channel
-  , forward_signature       :: Maybe Text -- ^ For messages forwarded from channels, signature of the post author if present
-  , forward_date            :: Maybe Int -- ^ For forwarded messages, date the original message was sent in Unix time
+  , forward_origin          :: Maybe MessageOrigin -- ^ Information about the original message for forwarded messages
+  , is_topic_message        :: Maybe True -- ^ True, if the message is sent to a forum topic
+  , is_automatic_forward    :: Maybe True -- ^ True, if the message is a channel post that was automatically forwarded to the connected discussion group
   , reply_to_message        :: Maybe Message -- ^ For replies, the original message. Note that the 'Message' object in this field will not contain further 'reply_to_message' fields even if it itself is a reply.
+  , external_reply          :: Maybe ExternalReplyInfo -- ^ Information about the message that is being replied to, which may come from another chat or forum topic
+  , quote                   :: Maybe TextQuote -- ^ For replies that quote part of the original message, the quoted part of the message
+  , reply_to_story          :: Maybe Story -- ^ For replies to a story, the original story
+  , via_bot                 :: Maybe User -- ^ Bot through which the message was sent
   , edit_date               :: Maybe Int -- ^ Date the message was last edited in Unix time
+  , has_protected_content   :: Maybe True -- ^ True, if the message can't be forwarded
+  , is_from_offline         :: Maybe True -- ^ True, if the message was sent by an implicit action, for example, as an away or a greeting business message, or as a scheduled message
   , media_group_id          :: Maybe Text -- ^ The unique identifier of a media message group this message belongs to
   , author_signature        :: Maybe Text -- ^ Signature of the post author for messages in channels
   , text                    :: Maybe Text -- ^ For text messages, the actual UTF-8 text of the message
   , entities                :: Maybe [MessageEntity] -- ^ For text messages, special entities like usernames, URLs, bot commands, etc. that appear in the text
-  , caption_entities        :: Maybe [MessageEntity] -- ^ or messages with a caption, special entities like usernames, URLs, bot commands, etc. that appear in the caption
+  , link_preview_options    :: Maybe LinkPreviewOptions -- ^ Options used for link preview generation for the message, if it is a text message and link preview options were changed
+  , effect_id               :: Maybe Text -- ^ Unique identifier of the message effect added to the message
+  , animation               :: Maybe Animation -- ^ Message is an animation, information about the animation. For backward compatibility, when this field is set, the document field will also be set
   , audio                   :: Maybe Audio -- ^ Message is an audio file, information about the file
   , document                :: Maybe Document -- ^ Message is a general file, information about the file
-  , game                    :: Maybe Game -- ^ Message is a game, information about the game
+  , paid_media              :: Maybe PaidMediaInfo -- ^ Message contains paid media; information about the paid media
   , photo                   :: Maybe [PhotoSize] -- ^ Message is a photo, available sizes of the photo
   , sticker                 :: Maybe Sticker -- ^ Message is a sticker, information about the sticker
+  , story                   :: Maybe Story -- ^ Message is a forwarded story
   , video                   :: Maybe Video -- ^ Message is a video, information about the video
-  , voice                   :: Maybe Voice -- ^ Message is a voice message, information about the file
   , video_note              :: Maybe VideoNote -- ^ Message is a video note, information about the video message
+  , voice                   :: Maybe Voice -- ^ Message is a voice message, information about the file
   , caption                 :: Maybe Text -- ^ Caption for the photo or video
+  , caption_entities        :: Maybe [MessageEntity] -- ^ or messages with a caption, special entities like usernames, URLs, bot commands, etc. that appear in the caption
+  , show_caption_above_media :: Maybe True -- ^ True, if the caption must be shown above the message media
+  , has_media_spoiler       :: Maybe True -- ^ True, if the message media is covered by a spoiler animation
   , contact                 :: Maybe Contact -- ^ Message is a shared contact, information about the contact
-  , location                :: Maybe Location -- ^ Message is a shared location, information about the location
+  , dice                    :: Maybe Dice -- ^ Message is a dice with random value
+  , game                    :: Maybe Game -- ^ Message is a game, information about the game
+  , poll                    :: Maybe Poll -- ^ Message is a native poll, information about the poll
   , venue                   :: Maybe Venue -- ^ Message is a venue, information about the venue
-  , new_chat_member         :: Maybe User -- ^ A new member was added to the group, information about them (this member may be the bot itself)
+  , location                :: Maybe Location -- ^ Message is a shared location, information about the location
   , new_chat_members        :: Maybe [User] -- ^ New members that were added to the group or supergroup and information about them (the bot itself may be one of these members)
   , left_chat_member        :: Maybe User -- ^ A member was removed from the group, information about them (this member may be the bot itself)
   , new_chat_title          :: Maybe Text -- ^ A chat title was changed to this value
@@ -905,11 +1047,37 @@ data Message = Message
   , group_chat_created      :: Maybe Bool -- ^ Service message: the group has been created
   , supergroup_chat_created :: Maybe Bool -- ^ Service message: the supergroup has been created
   , channel_chat_created    :: Maybe Bool -- ^ Service message: the channel has been created
+  , message_auto_delete_timer_changed :: Maybe MessageAutoDeleteTimerChanged -- ^ Service message: auto-delete timer settings changed in the chat
   , migrate_to_chat_id      :: Maybe Int64 -- ^ The group has been migrated to a supergroup with the specified identifier, not exceeding 1e13 by absolute value
   , migrate_from_chat_id    :: Maybe Int64 -- ^ The supergroup has been migrated from a group with the specified identifier, not exceeding 1e13 by absolute value
   , pinned_message          :: Maybe Message -- ^ Specified message was pinned. Note that the Message object in this field will not contain further reply_to_message fields even if it is itself a reply.
   , invoice                 :: Maybe Invoice -- ^  Message is an invoice for a payment, information about the invoice.
   , successful_payment      :: Maybe SuccessfulPayment -- ^  Message is a service message about a successful payment, information about the payment.
+  , refunded_payment        :: Maybe RefundedPayment -- ^ Message is a service message about a refunded payment, information about the payment. More about payments »
+  , users_shared            :: Maybe UsersShared -- ^ Service message: users were shared with the bot
+  , chat_shared             :: Maybe ChatShared -- ^ Service message: a chat was shared with the bot
+  , connected_website       :: Maybe String -- ^ The domain name of the website on which the user has logged in. More about Telegram Login »
+  , write_access_allowed    :: Maybe WriteAccessAllowed -- ^ Service message: the user allowed the bot to write messages after adding it to the attachment or side menu, launching a Web App from a link, or accepting an explicit request from a Web App sent by the method requestWriteAccess
+  , passport_data           :: Maybe PassportData -- ^ Telegram Passport data
+  , proximity_alert_triggered :: Maybe ProximityAlertTriggered -- ^ Service message. A user in the chat triggered another user's proximity alert while sharing Live Location.
+  , boost_added             :: Maybe ChatBoostAdded -- ^ Service message: user boosted the chat
+  , chat_background_set     :: Maybe ChatBackground -- ^ Service message: chat background set
+  , forum_topic_created     :: Maybe ForumTopicCreated -- ^ Service message: forum topic created
+  , forum_topic_edited      :: Maybe ForumTopicEdited -- ^ Service message: forum topic edited
+  , forum_topic_closed      :: Maybe ForumTopicClosed -- ^ Service message: forum topic closed
+  , forum_topic_reopened    :: Maybe ForumTopicReopened -- ^ Service message: forum topic reopened
+  , general_forum_topic_hidden :: Maybe GeneralForumTopicHidden -- ^ Service message: the 'General' forum topic hidden
+  , general_forum_topic_unhidden :: Maybe GeneralForumTopicUnhidden -- ^ Service message: the 'General' forum topic unhidden
+  , giveaway_created        :: Maybe GiveawayCreated -- ^ Service message: a scheduled giveaway was created
+  , giveaway                :: Maybe Giveaway -- ^ The message is a scheduled giveaway message
+  , giveaway_winners        :: Maybe GiveawayWinners -- ^ A giveaway with public winners was completed
+  , giveaway_completed      :: Maybe GiveawayCompleted -- ^ Service message: a giveaway without public winners was completed
+  , video_chat_scheduled    :: Maybe VideoChatScheduled -- ^ Service message: video chat scheduled
+  , video_chat_started      :: Maybe VideoChatStarted -- ^ Service message: video chat started
+  , video_chat_ended        :: Maybe VideoChatEnded -- ^ Service message: video chat ended
+  , video_chat_participants_invited :: Maybe VideoChatParticipantsInvited -- ^ Service message: new participants invited to a video chat
+  , web_app_data            :: Maybe WebAppData -- ^ Service message: data sent by a Web App
+  , reply_markup            :: Maybe InlineKeyboardMarkup -- ^ Inline keyboard attached to the message. login_url buttons are represented as ordinary url buttons.
   } deriving (FromJSON, ToJSON, Show, Generic)
 
 -- | This object represents one special entity in a text message. For example, hashtags, usernames, URLs, etc.
@@ -1141,7 +1309,7 @@ instance FromJSON MaskPositionPoint where
   parseJSON "eyes" = pure Eyes
   parseJSON "mouth" = pure Mouth
   parseJSON "chin" = pure Chin
-  parseJSON _ = fail $ "Failed to parse MaskPositionPoint"
+  parseJSON _ = fail "Failed to parse MaskPositionPoint"
 
 data MaskPosition = MaskPosition
   {
